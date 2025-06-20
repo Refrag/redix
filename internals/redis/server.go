@@ -5,9 +5,9 @@ import (
 	"log"
 	"sync/atomic"
 
-	"github.com/alash3al/redix/internals/config"
-	"github.com/alash3al/redix/internals/datastore/contract"
-	"github.com/alash3al/redix/internals/redis/commands"
+	"github.com/Refrag/redix/internals/config"
+	"github.com/Refrag/redix/internals/datastore/contract"
+	"github.com/Refrag/redix/internals/redis/commands"
 	"github.com/tidwall/redcon"
 )
 

@@ -2,7 +2,7 @@
 
 package filesystem
 
-import "github.com/alash3al/redix/internals/datastore/contract"
+import "github.com/Refrag/redix/internals/datastore/contract"
 
 // Global consts
 const (

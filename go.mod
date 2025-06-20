@@ -1,4 +1,4 @@
-module github.com/alash3al/redix
+module github.com/Refrag/redix
 
 go 1.17
 

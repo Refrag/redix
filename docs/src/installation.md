@@ -2,7 +2,7 @@
 
 #### 1)- Binary installation
 
-1. Goto the [releases page](https://github.com/alash3al/redix/releases).
+1. Goto the [releases page](https://github.com/Refrag/redix/releases).
 2. Select the release the matches your OS (Linux or Mac).
 3. Extract the binary file from the downloaded archive.
 4. Rename the extracted binary file as `redix` and copy/move it to your `/usr/local/bin` or any folder included in your `$PATH` env-var.
@@ -15,7 +15,7 @@
 # Running
 > assuming you followed the corresponding installation instructions above,
 > and created a configurations file called `redix.hcl` in the current working directory
-> containing the configurations content found [here](https://github.com/alash3al/redix/blob/master/redix.hcl)
+> containing the configurations content found [here](https://github.com/Refrag/redix/blob/master/redix.hcl)
 > and edited to match your preferences, for more info about configurations [click here](./configurations.md).
 
 #### 1)- Binary

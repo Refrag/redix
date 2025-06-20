@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/alash3al/redix/internals/datastore/contract"
+	"github.com/Refrag/redix/internals/datastore/contract"
 )
 
 // Engine represents the contract.Engine implementation

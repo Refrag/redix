@@ -7,12 +7,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/alash3al/redix/internals/config"
-	"github.com/alash3al/redix/internals/datastore/contract"
-	"github.com/alash3al/redix/internals/redis"
+	"github.com/Refrag/redix/internals/config"
+	"github.com/Refrag/redix/internals/datastore/contract"
+	"github.com/Refrag/redix/internals/redis"
 
-	_ "github.com/alash3al/redix/internals/datastore/engines/filesystem"
-	_ "github.com/alash3al/redix/internals/datastore/engines/postgresql"
+	_ "github.com/Refrag/redix/internals/datastore/engines/filesystem"
+	_ "github.com/Refrag/redix/internals/datastore/engines/postgresql"
 )
 
 var (

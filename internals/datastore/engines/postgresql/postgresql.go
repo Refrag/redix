@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alash3al/redix/internals/datastore/contract"
+	"github.com/Refrag/redix/internals/datastore/contract"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )

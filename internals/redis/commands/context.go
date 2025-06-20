@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/alash3al/redix/internals/config"
-	"github.com/alash3al/redix/internals/datastore/contract"
+	"github.com/Refrag/redix/internals/config"
+	"github.com/Refrag/redix/internals/datastore/contract"
 	"github.com/tidwall/redcon"
 )
 
