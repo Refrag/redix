@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -102,16 +103,24 @@ func init() {
 		}
 
 		if c.Argc > 2 {
+			// FIX: Added bounds checking to prevent panic when accessing i+1
+			// Previously could crash if "ex" was the last argument
 			for i := 0; i < len(c.Argv); i++ {
 				chr := string(bytes.ToLower(c.Argv[i]))
 				switch chr {
 				case "ex":
+					// Check if next argument exists before accessing it
+					if i+1 >= len(c.Argv) {
+						c.Conn.WriteError("Err EX requires a value")
+						return
+					}
 					n, err := strconv.ParseInt(string(c.Argv[i+1]), 10, 64)
 					if err != nil {
 						c.Conn.WriteError("Err " + err.Error())
 						return
 					}
 					writeOpts.TTL = time.Second * time.Duration(n)
+					i++ // Skip the next argument since we consumed it
 				case "keepttl":
 					writeOpts.KeepTTL = true
 				case "nx":
@@ -219,17 +228,62 @@ func init() {
 			return
 		}
 
+		deletedCount := 0
+
+		deleteKey := func(keyPattern string) error {
+			// Check if the key contains wildcard character
+			if strings.Contains(keyPattern, "*") {
+				keyPattern = strings.TrimLeft(keyPattern, "/")
+
+				prefix := strings.Split(keyPattern, "*")[0]
+				err := c.Engine.Iterate(&contract.IteratorOpts{
+					Prefix: c.AbsoluteKeyPath([]byte(prefix)),
+					Callback: func(ro *contract.ReadOutput) error {
+						keyToMatch := string(ro.Key)
+						namespace, _ := c.SessionGet("namespace")
+						if strings.HasPrefix(keyToMatch, namespace.(string)) {
+							keyToMatch = strings.TrimPrefix(keyToMatch, namespace.(string))
+						}
+
+						matched, err := filepath.Match(keyPattern, keyToMatch)
+						if err != nil {
+							return err
+						}
+
+						if matched {
+							_, err := c.Engine.Write(&contract.WriteInput{
+								Key:   ro.Key,
+								Value: nil,
+							})
+							if err != nil {
+								return err
+							}
+							deletedCount++
+						}
+						return nil
+					},
+				})
+				return err
+			} else {
+				_, err := c.Engine.Write(&contract.WriteInput{
+					Key:   c.AbsoluteKeyPath([]byte(keyPattern)),
+					Value: nil,
+				})
+				if err == nil {
+					deletedCount++
+				}
+				return err
+			}
+		}
+
 		if c.Cfg.Server.Redis.AsyncWrites {
+			// NOTE: In async mode, deletedCount is not accurate since goroutines
+			// complete after response is sent. This is a design trade-off for performance.
 			go (func() {
 				for i := range c.Argv {
-					_, err := c.Engine.Write(&contract.WriteInput{
-						Key:   c.AbsoluteKeyPath(c.Argv[i]),
-						Value: nil,
-					})
-
-					if err != nil {
-						log.Println("[FATAL]", err.Error())
-						return
+					keyPattern := string(c.Argv[i])
+					if err := deleteKey(keyPattern); err != nil {
+						log.Println("[FATAL] DEL error:", err.Error())
 					}
 				}
 			})()
@@ -239,18 +293,14 @@ func init() {
 		}
 
 		for i := range c.Argv {
-			_, err := c.Engine.Write(&contract.WriteInput{
-				Key:   c.AbsoluteKeyPath(c.Argv[i]),
-				Value: nil,
-			})
-
-			if err != nil {
+			keyPattern := string(c.Argv[i])
+			if err := deleteKey(keyPattern); err != nil {
 				c.Conn.WriteError("Err " + err.Error())
 				return
 			}
 		}
 
-		c.Conn.WriteString("OK")
+		c.Conn.WriteInt(deletedCount)
 	})
 
 	// HGETALL <prefix>
@@ -317,7 +367,9 @@ func init() {
 		}
 
 		if err := c.Engine.Publish(c.AbsoluteKeyPath([]byte("redix"), c.Argv[0]), c.Argv[1]); err != nil {
-			c.Conn.WriteError("ERR %s " + err.Error())
+			// FIX: Removed invalid format string placeholder that wasn't being used
+			// Was: "ERR %s " + err.Error() - the %s had no corresponding argument
+			c.Conn.WriteError("ERR " + err.Error())
 			return
 		}
 
