@@ -12,7 +12,7 @@
 - `TTL <key>` **(not supported while using `filesystem` engine)**
 - `GET <key> [DELETE]`, it has an alias for backward compatibility reasons called `GETDEL <key>`
 - `INCR <key> [<delta>]`, it has an alias for backward compatibility reasons called `INCRBY` **(not supported while using `filesystem` engine)**
-- `DEL key [key ...]`
+- `DEL key [key ...]` - Supports wildcard pattern using `*` character (e.g., `DEL user:*` to delete all keys starting with "user:")
 - `HGETALL <prefix>`, Fetches the whole data under the specified prefix as a hashmap
     ```bash
     $ 127.0.0.1:6380> set /users/u1 USER_1
