@@ -3,52 +3,53 @@ package redis
 import (
 	"fmt"
 	"log"
-	"sync/atomic"
 
 	"github.com/Refrag/redix/internals/config"
 	"github.com/Refrag/redix/internals/datastore/contract"
-	"github.com/Refrag/redix/internals/redis/commands"
+	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
 	"github.com/tidwall/redcon"
-)
-
-var (
-	connCounter int64 = 0
 )
 
 // ListenAndServe start a redis server
 func ListenAndServe(cfg *config.Config, engine contract.Engine) error {
-	commands.HandleFunc("CLIENTCOUNT", func(c *commands.Context) {
-		c.Conn.WriteAny(atomic.LoadInt64(&connCounter))
+	commandutilities.HandleFunc("CLIENTCOUNT", func(c *commandutilities.Context) {
+		c.Conn.WriteAny(commandutilities.GetConnCounter())
 	})
 
 	fmt.Println("=> started listening on", cfg.Server.Redis.ListenAddr, "...")
 	return redcon.ListenAndServe(cfg.Server.Redis.ListenAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
-			ctx := commands.Context{
-				Conn:   conn,
-				Engine: engine,
-				Cfg:    cfg,
-				Argc:   len(cmd.Args) - 1,
-				Argv:   cmd.Args[1:],
-			}
-
-			commands.Call(string(cmd.Args[0]), &ctx)
+			handleCommand(conn, cmd, engine, cfg)
 		},
 		func(conn redcon.Conn) bool {
-			if cfg.Server.Redis.MaxConns > 0 && cfg.Server.Redis.MaxConns <= atomic.LoadInt64(&connCounter) {
-				log.Println("max connections reached!")
-				return false
-			}
-
-			atomic.AddInt64(&connCounter, 1)
-
-			conn.SetContext(map[string]interface{}{
-				"namespace": "/0/",
-			})
-			return true
+			return accept(cfg, conn)
 		},
 		func(conn redcon.Conn, err error) {
-			atomic.AddInt64(&connCounter, -1)
+			closed(conn, err)
 		},
 	)
+}
+
+func accept(cfg *config.Config, conn redcon.Conn) bool {
+	if cfg.Server.Redis.MaxConns > 0 && cfg.Server.Redis.MaxConns <= commandutilities.GetConnCounter() {
+		log.Println("max connections reached!")
+		return false // reject connection
+	}
+
+	commandutilities.IncrementConnCounter()
+
+	conn.SetContext(map[string]interface{}{
+		"namespace": "/0/",
+	})
+	return true // accept connection
+}
+
+func handleCommand(conn redcon.Conn, cmd redcon.Command, engine contract.Engine, cfg *config.Config) {
+	ctxPointer := commandutilities.NewContext(conn, engine, cfg, cmd.Args[1:], len(cmd.Args)-1)
+
+	commandutilities.Call(string(cmd.Args[0]), ctxPointer)
+}
+
+func closed(conn redcon.Conn, err error) {
+	commandutilities.DecrementConnCounter()
 }

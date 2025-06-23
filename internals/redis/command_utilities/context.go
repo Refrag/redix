@@ -1,4 +1,4 @@
-package commands
+package commandutilities
 
 import (
 	"bytes"
@@ -52,4 +52,14 @@ func (c *Context) SessionGet(k string) (interface{}, bool) {
 func (c *Context) AbsoluteKeyPath(k ...[]byte) []byte {
 	ns, _ := c.SessionGet("namespace")
 	return []byte(ns.(string) + strings.TrimLeft(string(bytes.Join(k, []byte("/"))), "/"))
+}
+
+func NewContext(conn redcon.Conn, engine contract.Engine, cfg *config.Config, argv [][]byte, argc int) *Context {
+	return &Context{
+		Conn:   conn,
+		Engine: engine,
+		Cfg:    cfg,
+		Argv:   argv,
+		Argc:   argc,
+	}
 }
