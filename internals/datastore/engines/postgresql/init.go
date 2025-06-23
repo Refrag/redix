@@ -7,7 +7,7 @@ const (
 	Name = "postgresql"
 )
 
-// init registers the engine.
-func init() {
+// Register registers the PostgreSQL engine.
+func Register() {
 	contract.Register(Name, &Engine{})
 }

@@ -9,7 +9,7 @@ const (
 	Name = "filesystem"
 )
 
-// init registers the engine.
-func init() {
+// Register registers the filesystem engine.
+func Register() {
 	contract.Register(Name, &Engine{})
 }

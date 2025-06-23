@@ -2,6 +2,7 @@ package commandhandlers
 
 import (
 	"bytes"
+	"errors"
 	log "log/slog"
 	"strconv"
 	"time"
@@ -14,6 +15,35 @@ const (
 	SetArgumentsMinCount = 2
 )
 
+// parseSetOptions parses the set options.
+func parseSetOptions(c *commandutilities.Context, writeOpts *contract.WriteInput) error {
+	if c.Argc <= SetArgumentsMinCount {
+		return nil
+	}
+
+	for i := SetArgumentsMinCount; i < len(c.Argv); i++ {
+		chr := string(bytes.ToLower(c.Argv[i]))
+		switch chr {
+		case "ex":
+			if i+1 >= len(c.Argv) {
+				return errors.New("EX requires a value")
+			}
+			n, err := strconv.ParseInt(string(c.Argv[i+1]), 10, 64)
+			if err != nil {
+				return err
+			}
+			writeOpts.TTL = time.Second * time.Duration(n)
+			i++
+		case "keepttl":
+			writeOpts.KeepTTL = true
+		case "nx":
+			writeOpts.OnlyIfNotExists = true
+		}
+	}
+	return nil
+}
+
+// Set sets a key-value pair in the database.
 func Set(c *commandutilities.Context) {
 	if c.Argc < SetArgumentsMinCount {
 		c.Conn.WriteError("Err invalid arguments specified")
@@ -25,31 +55,9 @@ func Set(c *commandutilities.Context) {
 		Value: c.Argv[1],
 	}
 
-	if c.Argc > SetArgumentsMinCount {
-		// FIX: Added bounds checking to prevent panic when accessing i+1
-		// Previously could crash if "ex" was the last argument
-		for i := 0; i < len(c.Argv); i++ {
-			chr := string(bytes.ToLower(c.Argv[i]))
-			switch chr {
-			case "ex":
-				// Check if next argument exists before accessing it
-				if i+1 >= len(c.Argv) {
-					c.Conn.WriteError("Err EX requires a value")
-					return
-				}
-				n, err := strconv.ParseInt(string(c.Argv[i+1]), 10, 64)
-				if err != nil {
-					c.Conn.WriteError("Err " + err.Error())
-					return
-				}
-				writeOpts.TTL = time.Second * time.Duration(n)
-				i++ // Skip the next argument since we consumed it
-			case "keepttl":
-				writeOpts.KeepTTL = true
-			case "nx":
-				writeOpts.OnlyIfNotExists = true
-			}
-		}
+	if err := parseSetOptions(c, &writeOpts); err != nil {
+		c.Conn.WriteError("Err " + err.Error())
+		return
 	}
 
 	if c.Cfg.Server.Redis.AsyncWrites {

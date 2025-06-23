@@ -41,6 +41,28 @@ func (e *Engine) Open(dir string) (err error) {
 	return nil
 }
 
+// deleteMatchingKeys deletes the keys that match the given prefix.
+func (e *Engine) deleteMatchingKeys(keyPrefix []byte) error {
+	return filepath.WalkDir(e.kvDir, func(path string, d fs.DirEntry, err error) error {
+		if path == e.kvDir {
+			return nil
+		}
+
+		actualKey, err := hex.DecodeString(d.Name())
+		if err != nil {
+			return err
+		}
+
+		if bytes.HasPrefix(actualKey, keyPrefix) {
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
 // Write writes into the database.
 func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error) {
 	if input == nil {
@@ -114,24 +136,7 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 	}
 
 	if input.Delete {
-		return nil, filepath.WalkDir(e.kvDir, func(path string, d fs.DirEntry, err error) error {
-			if path == e.kvDir {
-				return nil
-			}
-
-			actualKey, err := hex.DecodeString(d.Name())
-			if err != nil {
-				return err
-			}
-
-			if bytes.HasPrefix(actualKey, input.Key) {
-				if err := os.Remove(path); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
+		return nil, e.deleteMatchingKeys(input.Key)
 	}
 
 	return &contract.ReadOutput{

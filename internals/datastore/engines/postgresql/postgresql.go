@@ -29,22 +29,20 @@ func (e *Engine) Open(dsn string) (err error) {
 
 	if _, err := e.conn.Exec(
 		context.Background(),
-		`
-			CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
-			CREATE TABLE IF NOT EXISTS redix_data_v5 (
-				_id 		BIGSERIAL PRIMARY KEY,
-				_expires_at BIGINT,
-				_key 		TEXT,
-				_value 		JSONB
-			);
-
-			CREATE UNIQUE INDEX IF NOT EXISTS uniq_idx_redix_data_v5_key ON redix_data_v5 (_key);
-
-			CREATE INDEX IF NOT EXISTS trgm_idx_redix_data_v5_key ON redix_data_v5 USING GIN(_key gin_trgm_ops);
-
-			CREATE INDEX IF NOT EXISTS idx_redix_data_v5_expires_at ON redix_data_v5 (_expires_at);
-		`,
+		fmt.Sprintf(
+			`
+				%s
+				%s
+				%s
+				%s
+				%s
+			`,
+			createExtensionQuery,
+			createTableQuery,
+			createUniqueIndexQuery,
+			createTrgmIndexQuery,
+			createExpiresAtIndexQuery,
+		),
 	); err != nil {
 		return err
 	}
@@ -55,7 +53,7 @@ func (e *Engine) Open(dsn string) (err error) {
 
 			if _, err := e.conn.Exec(
 				context.Background(),
-				`DELETE FROM redix_data_v5 WHERE _expires_at != 0 and _expires_at <= $1`,
+				deleteExpiredKeysQuery,
 				now,
 			); err != nil {
 				panic(err)
@@ -68,74 +66,98 @@ func (e *Engine) Open(dsn string) (err error) {
 	return nil
 }
 
-// Write writes into the database.
-func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error) {
-	if input == nil {
-		return nil, errors.New("empty input specified")
-	}
-
+func (e *Engine) handleDeleteOperations(input *contract.WriteInput) error {
 	if input.Key == nil {
-		if _, err := e.conn.Exec(context.Background(), "DELETE FROM redix_data_v5"); err != nil {
-			return nil, err
-		}
-
-		return nil, nil
+		_, err := e.conn.Exec(context.Background(), deleteAllKeysQuery)
+		return err
 	}
 
 	if input.Value == nil {
-		if _, err := e.conn.Exec(context.Background(), "DELETE FROM redix_data_v5 WHERE _key LIKE $1", append(input.Key, '%')); err != nil {
-			return nil, err
-		}
-
-		return nil, nil
+		_, err := e.conn.Exec(
+			context.Background(),
+			deleteMatchingKeysQuery,
+			append(input.Key, '%'),
+		)
+		return err
 	}
 
-	insertQuery := []string{"INSERT INTO redix_data_v5(_key, _value, _expires_at) VALUES($1, $2, $3)"}
-	appending := false
+	return nil
+}
+
+func (e *Engine) processValue(input *contract.WriteInput) (interface{}, bool, error) {
+	val := interface{}(string(input.Value))
 	isNumber := false
-	ttl := int64(0)
-
-	var val interface{} = string(input.Value)
-
-	if input.TTL > 0 {
-		ttl = time.Now().Add(input.TTL).UnixNano()
-	}
 
 	if fval, err := strconv.ParseFloat(string(input.Value), 64); err == nil {
 		isNumber = true
 		val = fval
 	}
 
-	if input.OnlyIfNotExists {
-		insertQuery = append(insertQuery, "ON CONFLICT (_key) DO NOTHING")
-	} else if input.Increment {
-		if !isNumber {
-			return nil, errors.New("the specified value is not a number")
-		}
+	if input.Increment && !isNumber {
+		return nil, false, errors.New("the specified value is not a number")
+	}
 
+	return val, isNumber, nil
+}
+
+func (e *Engine) buildInsertQuery(input *contract.WriteInput) ([]string, bool) {
+	insertQuery := []string{insertQuery}
+	appending := false
+
+	if input.OnlyIfNotExists {
+		insertQuery = append(insertQuery, onConflictDoNothing)
+	} else if input.Increment {
 		appending = true
-		insertQuery = append(insertQuery, "ON CONFLICT (_key) DO UPDATE SET _value = (EXCLUDED._value::text::float + redix_data_v5._value::text::float)::text::jsonb")
+		insertQuery = append(insertQuery, incrementInsertQuery)
 	} else if input.Append {
 		appending = true
-		insertQuery = append(insertQuery, "ON CONFLICT (_key) DO UPDATE SET _value = (redix_data_v5._value::text || EXCLUDED._value::text)::jsonb")
+		insertQuery = append(insertQuery, appendInsertQuery)
 	} else {
 		appending = true
-		insertQuery = append(insertQuery, "ON CONFLICT (_key) DO UPDATE SET _value = $2::jsonb")
+		insertQuery = append(insertQuery, updateQuery)
 	}
 
 	if appending && !input.KeepTTL {
-		insertQuery = append(insertQuery, ", _expires_at = $3::bigint")
+		insertQuery = append(insertQuery, expiresAtUpdateQuery)
 	}
 
-	insertQuery = append(insertQuery, "RETURNING _value, _expires_at")
+	insertQuery = append(insertQuery, returningQuery)
+	return insertQuery, appending
+}
 
-	var retVal []byte
-	var retExpiresAt int64
+// Write writes into the database.
+func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error) {
+	if input == nil {
+		return nil, errors.New("empty input specified")
+	}
+
+	if err := e.handleDeleteOperations(input); err != nil {
+		return nil, err
+	}
+
+	if input.Key == nil || input.Value == nil {
+		return nil, nil
+	}
+
+	val, _, err := e.processValue(input)
+	if err != nil {
+		return nil, err
+	}
+
+	insertQuery, _ := e.buildInsertQuery(input)
+
+	ttl := int64(0)
+	if input.TTL > 0 {
+		ttl = time.Now().Add(input.TTL).UnixNano()
+	}
 
 	jsonVal, err := json.Marshal(val)
 	if err != nil {
 		return nil, err
 	}
+
+	var retVal []byte
+	var retExpiresAt int64
 
 	if err := e.conn.QueryRow(
 		context.Background(),
@@ -154,7 +176,7 @@ func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error
 	}, nil
 }
 
-// Get reads from the database.
+// Read reads from the database.
 func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 	if input == nil {
 		return nil, errors.New("empty input specified")
@@ -166,7 +188,7 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 
 	if err := e.conn.QueryRow(
 		context.Background(),
-		"SELECT _value, _expires_at FROM redix_data_v5 WHERE _key = $1",
+		selectQuery,
 		input.Key,
 	).Scan(&retQueryVal, &retExpiresAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -193,7 +215,7 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 
 	deleter := func() {
 		// TODO report any expected error?
-		e.conn.Exec(context.Background(), "DELETE FROM redix_data_v5 WHERE _key = $1", input.Key)
+		e.conn.Exec(context.Background(), deleteQuery, input.Key)
 	}
 
 	if readOutput.TTL < 0 {
@@ -224,7 +246,7 @@ func (e *Engine) Iterate(opts *contract.IteratorOpts) error {
 
 	iter, err := e.conn.Query(
 		context.Background(),
-		"SELECT _key, _value, _expires_at FROM redix_data_v5 WHERE _key LIKE $1 ORDER BY _id ASC",
+		selectWhereQuery,
 		append(opts.Prefix, '%'),
 	)
 	if err != nil {
@@ -278,7 +300,7 @@ func (e *Engine) Close() error {
 // Publish submits the payload to the specified channel.
 func (e *Engine) Publish(channel []byte, payload []byte) error {
 	channelEncoded := fmt.Sprintf("%x", md5.Sum(channel))
-	if _, err := e.conn.Exec(context.Background(), "SELECT pg_notify($1, $2)", channelEncoded, payload); err != nil {
+	if _, err := e.conn.Exec(context.Background(), selectNotifyQuery, channelEncoded, payload); err != nil {
 		return err
 	}
 
@@ -297,7 +319,7 @@ func (e *Engine) Subscribe(channel []byte, cb func([]byte) error) error {
 	}
 
 	channelEncoded := fmt.Sprintf("\"%x\"", md5.Sum(channel))
-	if _, err := conn.Exec(context.Background(), "LISTEN "+channelEncoded); err != nil {
+	if _, err := conn.Exec(context.Background(), fmt.Sprintf(listenQuery, channelEncoded)); err != nil {
 		return fmt.Errorf("database::listen::err %s", err.Error())
 	}
 

@@ -70,7 +70,7 @@ func RegisterHandlers() {
 
 	// FLUSHDB
 	commandutilities.HandleFunc("flushdb", func(c *commandutilities.Context) {
-		commandhandlers.FlushDb(c)
+		commandhandlers.FlushDB(c)
 	})
 
 	// PUBLISH

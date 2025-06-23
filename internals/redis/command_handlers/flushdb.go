@@ -5,7 +5,7 @@ import (
 	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
 )
 
-func FlushDb(c *commandutilities.Context) {
+func FlushDB(c *commandutilities.Context) {
 	_, err := c.Engine.Write(&contract.WriteInput{
 		Key:   c.AbsoluteKeyPath(),
 		Value: nil,
