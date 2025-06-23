@@ -2,8 +2,12 @@ package commandhandlers
 
 import commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
 
+const (
+	PublishArgumentsMinCount = 2
+)
+
 func Publish(c *commandutilities.Context) {
-	if c.Argc < 2 {
+	if c.Argc < PublishArgumentsMinCount {
 		c.Conn.WriteError("ERR wrong number of arguments for 'publish' command")
 		return
 	}

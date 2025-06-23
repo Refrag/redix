@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-// ReadFileWithSharedLock reads the specified file using a shared-lock
+// ReadFileWithSharedLock reads the specified file using a shared-lock.
 func ReadFileWithSharedLock(filename string) ([]byte, error) {
 	f, err := os.OpenFile(filename, os.O_RDONLY, 0775)
 	if err != nil {
@@ -31,7 +31,7 @@ func ReadFileWithSharedLock(filename string) ([]byte, error) {
 	return data, nil
 }
 
-// WriteFileWithExclusiveLock reads the specified file using a shared-lock
+// WriteFileWithExclusiveLock reads the specified file using a shared-lock.
 func WriteFileWithExclusiveLock(filename string, data []byte) (int, error) {
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC|os.O_SYNC, 07775)
 	if err != nil {

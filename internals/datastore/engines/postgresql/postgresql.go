@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,12 +15,12 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-// Engine represents the contract.Engine implementation
+// Engine represents the contract.Engine implementation.
 type Engine struct {
 	conn *pgxpool.Pool
 }
 
-// Open opens the database
+// Open opens the database.
 func (e *Engine) Open(dsn string) (err error) {
 	e.conn, err = pgxpool.Connect(context.Background(), dsn)
 	if err != nil {
@@ -67,10 +68,10 @@ func (e *Engine) Open(dsn string) (err error) {
 	return nil
 }
 
-// Write writes into the database
+// Write writes into the database.
 func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error) {
 	if input == nil {
-		return nil, fmt.Errorf("empty input specified")
+		return nil, errors.New("empty input specified")
 	}
 
 	if input.Key == nil {
@@ -109,7 +110,7 @@ func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error
 		insertQuery = append(insertQuery, "ON CONFLICT (_key) DO NOTHING")
 	} else if input.Increment {
 		if !isNumber {
-			return nil, fmt.Errorf("the specified value is not a number")
+			return nil, errors.New("the specified value is not a number")
 		}
 
 		appending = true
@@ -141,7 +142,7 @@ func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error
 		strings.Join(insertQuery, " "),
 		input.Key, string(jsonVal), ttl,
 	).Scan(&retVal, &retExpiresAt); err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
@@ -149,14 +150,14 @@ func (e *Engine) Write(input *contract.WriteInput) (*contract.WriteOutput, error
 
 	return &contract.WriteOutput{
 		Value: retVal,
-		TTL:   time.Now().Sub(time.Unix(0, retExpiresAt)),
+		TTL:   time.Since(time.Unix(0, retExpiresAt)),
 	}, nil
 }
 
-// Get reads from the database
+// Get reads from the database.
 func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 	if input == nil {
-		return nil, fmt.Errorf("empty input specified")
+		return nil, errors.New("empty input specified")
 	}
 
 	var retQueryVal []byte
@@ -168,7 +169,7 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 		"SELECT _value, _expires_at FROM redix_data_v5 WHERE _key = $1",
 		input.Key,
 	).Scan(&retQueryVal, &retExpiresAt); err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return &contract.ReadOutput{}, nil
 		}
 
@@ -187,7 +188,7 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 	}
 
 	if retExpiresAt != 0 {
-		readOutput.TTL = time.Unix(0, retExpiresAt).Sub(time.Now())
+		readOutput.TTL = time.Until(time.Unix(0, retExpiresAt))
 	}
 
 	deleter := func() {
@@ -211,17 +212,21 @@ func (e *Engine) Read(input *contract.ReadInput) (*contract.ReadOutput, error) {
 	return &readOutput, nil
 }
 
-// Iterate iterates on the whole database stops if the IteratorOpts returns an error
+// Iterate iterates on the whole database stops if the IteratorOpts returns an error.
 func (e *Engine) Iterate(opts *contract.IteratorOpts) error {
 	if opts == nil {
-		return fmt.Errorf("empty options specified")
+		return errors.New("empty options specified")
 	}
 
 	if opts.Callback == nil {
-		return fmt.Errorf("you must specify the callback")
+		return errors.New("you must specify the callback")
 	}
 
-	iter, err := e.conn.Query(context.Background(), "SELECT _key, _value, _expires_at FROM redix_data_v5 WHERE _key LIKE $1 ORDER BY _id ASC", append(opts.Prefix, '%'))
+	iter, err := e.conn.Query(
+		context.Background(),
+		"SELECT _key, _value, _expires_at FROM redix_data_v5 WHERE _key LIKE $1 ORDER BY _id ASC",
+		append(opts.Prefix, '%'),
+	)
 	if err != nil {
 		return err
 	}
@@ -248,7 +253,7 @@ func (e *Engine) Iterate(opts *contract.IteratorOpts) error {
 		}
 
 		if expiresAt != 0 {
-			readOutput.TTL = time.Unix(0, expiresAt).Sub(time.Now())
+			readOutput.TTL = time.Until(time.Unix(0, expiresAt))
 		}
 
 		// expired
@@ -264,13 +269,13 @@ func (e *Engine) Iterate(opts *contract.IteratorOpts) error {
 	return iter.Err()
 }
 
-// Close closes the connection
+// Close closes the connection.
 func (e *Engine) Close() error {
 	e.conn.Close()
 	return nil
 }
 
-// Publish submits the payload to the specified channel
+// Publish submits the payload to the specified channel.
 func (e *Engine) Publish(channel []byte, payload []byte) error {
 	channelEncoded := fmt.Sprintf("%x", md5.Sum(channel))
 	if _, err := e.conn.Exec(context.Background(), "SELECT pg_notify($1, $2)", channelEncoded, payload); err != nil {
@@ -280,10 +285,10 @@ func (e *Engine) Publish(channel []byte, payload []byte) error {
 	return nil
 }
 
-// Subscribe listens for the incoming payloads on the specified channel
+// Subscribe listens for the incoming payloads on the specified channel.
 func (e *Engine) Subscribe(channel []byte, cb func([]byte) error) error {
 	if cb == nil {
-		return fmt.Errorf("you must specify a callback (cb)")
+		return errors.New("you must specify a callback (cb)")
 	}
 
 	conn, err := e.conn.Acquire(context.Background())

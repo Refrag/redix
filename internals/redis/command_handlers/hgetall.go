@@ -1,6 +1,7 @@
 package commandhandlers
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/Refrag/redix/internals/datastore/contract"
@@ -25,7 +26,7 @@ func HGetAll(c *commandutilities.Context) {
 		},
 	})
 
-	if err != nil && err != contract.ErrStopIterator {
+	if err != nil && !errors.Is(err, contract.ErrStopIterator) {
 		c.Conn.WriteError("ERR " + err.Error())
 	}
 

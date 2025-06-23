@@ -1,13 +1,12 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 
 	"github.com/hashicorp/hcl/v2/hclsimple"
 )
 
-// Config represents global configs container
+// Config represents global configs container.
 type Config struct {
 	Server struct {
 		Redis struct {
@@ -23,9 +22,9 @@ type Config struct {
 	} `hcl:"engine,block"`
 }
 
-// Unmarshal parses the specified filename and load it into memory
+// Unmarshal parses the specified filename and load it into memory.
 func Unmarshal(filename string) (*Config, error) {
-	configdata, err := ioutil.ReadFile(filename)
+	configdata, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

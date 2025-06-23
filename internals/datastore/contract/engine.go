@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Engine represents an Engine
+// Engine represents an Engine.
 type Engine interface {
 	Open(string) error
 	Close() error
@@ -16,7 +16,7 @@ type Engine interface {
 	Subscribe([]byte, func([]byte) error) error
 }
 
-// WriteInput represents a PUT request
+// WriteInput represents a PUT request.
 type WriteInput struct {
 	Key             []byte
 	Value           []byte
@@ -27,19 +27,19 @@ type WriteInput struct {
 	KeepTTL         bool
 }
 
-// WriteOutput represents a PUT output
+// WriteOutput represents a PUT output.
 type WriteOutput struct {
 	Value []byte
 	TTL   time.Duration
 }
 
-// ReadInput represents a Get request
+// ReadInput represents a Get request.
 type ReadInput struct {
 	Key    []byte
 	Delete bool
 }
 
-// ReadOutput represents a Get output
+// ReadOutput represents a Get output.
 type ReadOutput struct {
 	Key    []byte
 	Value  []byte
@@ -47,13 +47,13 @@ type ReadOutput struct {
 	TTL    time.Duration
 }
 
-// IteratorOpts represents the itrator options
+// IteratorOpts represents the itrator options.
 type IteratorOpts struct {
 	Prefix   []byte
 	Callback func(*ReadOutput) error
 }
 
-// global vars
+// global vars.
 var (
 	ErrStopIterator = errors.New("STOP_ITERATOR")
 )

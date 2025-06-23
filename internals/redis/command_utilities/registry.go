@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Handler a command handler func
+// Handler a command handler func.
 type Handler func(*Context)
 
 var (
@@ -14,7 +14,7 @@ var (
 	commandsMapLock = &sync.RWMutex{}
 )
 
-// HandleFunc reigtser a command handler
+// HandleFunc reigtser a command handler.
 func HandleFunc(name string, fn Handler) {
 	commandsMapLock.Lock()
 	defer commandsMapLock.Unlock()
@@ -28,7 +28,7 @@ func HandleFunc(name string, fn Handler) {
 	commandsMap[name] = fn
 }
 
-// Call executes the specified command name if exists
+// Call executes the specified command name if exists.
 func Call(name string, ctx *Context) {
 	commandsMapLock.RLock()
 

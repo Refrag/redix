@@ -1,22 +1,20 @@
 package redis
 
 import (
-	"fmt"
-	"log"
+	log "log/slog"
 
 	"github.com/Refrag/redix/internals/config"
 	"github.com/Refrag/redix/internals/datastore/contract"
 	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
+	"github.com/Refrag/redix/internals/redis/commands"
 	"github.com/tidwall/redcon"
 )
 
-// ListenAndServe start a redis server
+// ListenAndServe start a redis server.
 func ListenAndServe(cfg *config.Config, engine contract.Engine) error {
-	commandutilities.HandleFunc("CLIENTCOUNT", func(c *commandutilities.Context) {
-		c.Conn.WriteAny(commandutilities.GetConnCounter())
-	})
+	commands.RegisterHandlers()
 
-	fmt.Println("=> started listening on", cfg.Server.Redis.ListenAddr, "...")
+	log.Info("started listening on", "address", cfg.Server.Redis.ListenAddr)
 	return redcon.ListenAndServe(cfg.Server.Redis.ListenAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
 			handleCommand(conn, cmd, engine, cfg)
@@ -25,14 +23,14 @@ func ListenAndServe(cfg *config.Config, engine contract.Engine) error {
 			return accept(cfg, conn)
 		},
 		func(conn redcon.Conn, err error) {
-			closed(conn, err)
+			closed()
 		},
 	)
 }
 
 func accept(cfg *config.Config, conn redcon.Conn) bool {
 	if cfg.Server.Redis.MaxConns > 0 && cfg.Server.Redis.MaxConns <= commandutilities.GetConnCounter() {
-		log.Println("max connections reached!")
+		log.Error("max connections reached!")
 		return false // reject connection
 	}
 
@@ -50,6 +48,6 @@ func handleCommand(conn redcon.Conn, cmd redcon.Command, engine contract.Engine,
 	commandutilities.Call(string(cmd.Args[0]), ctxPointer)
 }
 
-func closed(conn redcon.Conn, err error) {
+func closed() {
 	commandutilities.DecrementConnCounter()
 }

@@ -2,7 +2,7 @@ package commandhandlers
 
 import (
 	"bytes"
-	"log"
+	log "log/slog"
 	"strconv"
 	"time"
 
@@ -10,8 +10,12 @@ import (
 	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
 )
 
+const (
+	SetArgumentsMinCount = 2
+)
+
 func Set(c *commandutilities.Context) {
-	if c.Argc < 2 {
+	if c.Argc < SetArgumentsMinCount {
 		c.Conn.WriteError("Err invalid arguments specified")
 		return
 	}
@@ -21,7 +25,7 @@ func Set(c *commandutilities.Context) {
 		Value: c.Argv[1],
 	}
 
-	if c.Argc > 2 {
+	if c.Argc > SetArgumentsMinCount {
 		// FIX: Added bounds checking to prevent panic when accessing i+1
 		// Previously could crash if "ex" was the last argument
 		for i := 0; i < len(c.Argv); i++ {
@@ -45,14 +49,13 @@ func Set(c *commandutilities.Context) {
 			case "nx":
 				writeOpts.OnlyIfNotExists = true
 			}
-
 		}
 	}
 
 	if c.Cfg.Server.Redis.AsyncWrites {
 		go (func() {
 			if _, err := c.Engine.Write(&writeOpts); err != nil {
-				log.Println("[FATAL]", err.Error())
+				log.Error("[FATAL]", "error", err.Error())
 			}
 		})()
 	} else {

@@ -19,8 +19,12 @@ var (
 	cfg *config.Config
 )
 
+const (
+	minArgsCount = 2
+)
+
 func main() {
-	if len(os.Args) < 2 {
+	if len(os.Args) < minArgsCount {
 		log.Fatal("you must specify the configuration file as an argument")
 	}
 

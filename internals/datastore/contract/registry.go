@@ -10,7 +10,7 @@ var (
 	enginesLock = new(sync.RWMutex)
 )
 
-// Register adds the specified engine to the registry
+// Register adds the specified engine to the registry.
 func Register(name string, engine Engine) {
 	enginesLock.Lock()
 	defer enginesLock.Unlock()
@@ -22,7 +22,7 @@ func Register(name string, engine Engine) {
 	engines[name] = engine
 }
 
-// Open initialize an instance of the specified engine name + dsn
+// Open initialize an instance of the specified engine name + dsn.
 func Open(name string, dsn string) (Engine, error) {
 	enginesLock.RLock()
 	defer enginesLock.RUnlock()
@@ -35,7 +35,7 @@ func Open(name string, dsn string) (Engine, error) {
 	return engine, engine.Open(dsn)
 }
 
-// Exists whether the specified engine name exists or not
+// Exists whether the specified engine name exists or not.
 func Exists(name string) bool {
 	enginesLock.RLock()
 

@@ -13,18 +13,18 @@ func Get(c *commandutilities.Context) {
 		return
 	}
 
-	delete := false
+	shouldDelete := false
 
 	for i := 1; i < c.Argc; i++ {
 		switch strings.ToLower(string(c.Argv[i])) {
 		case "delete":
-			delete = true
+			shouldDelete = true
 		}
 	}
 
 	ret, err := c.Engine.Read(&contract.ReadInput{
 		Key:    c.AbsoluteKeyPath(c.Argv[0]),
-		Delete: delete,
+		Delete: shouldDelete,
 	})
 
 	if err != nil {

@@ -1,7 +1,7 @@
 package commandhandlers
 
 import (
-	"log"
+	log "log/slog"
 
 	"github.com/Refrag/redix/internals/datastore/contract"
 	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
@@ -25,7 +25,7 @@ func Incr(c *commandutilities.Context) {
 				Value:     delta,
 				Increment: true,
 			}); err != nil {
-				log.Println("[FATAL]", err.Error())
+				log.Error("[FATAL]", "error", err.Error())
 			}
 		})()
 

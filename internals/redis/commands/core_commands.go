@@ -5,7 +5,8 @@ import (
 	commandutilities "github.com/Refrag/redix/internals/redis/command_utilities"
 )
 
-func init() {
+// Initialize initializes the core commands.
+func RegisterHandlers() {
 	// PING
 	commandutilities.HandleFunc("ping", func(c *commandutilities.Context) {
 		commandhandlers.Ping(c)
@@ -79,5 +80,9 @@ func init() {
 
 	commandutilities.HandleFunc("subscribe", func(c *commandutilities.Context) {
 		commandhandlers.Subscribe(c)
+	})
+
+	commandutilities.HandleFunc("CLIENTCOUNT", func(c *commandutilities.Context) {
+		commandhandlers.ClientCount(c)
 	})
 }

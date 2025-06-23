@@ -19,48 +19,48 @@ func Del(c *commandutilities.Context) {
 
 	deleteKey := func(keyPattern string) error {
 		// Check if the key contains wildcard character
-		if strings.Contains(keyPattern, "*") {
-			keyPattern = strings.TrimLeft(keyPattern, "/")
-
-			prefix := strings.Split(keyPattern, "*")[0]
-			err := c.Engine.Iterate(&contract.IteratorOpts{
-				Prefix: c.AbsoluteKeyPath([]byte(prefix)),
-				Callback: func(ro *contract.ReadOutput) error {
-					keyToMatch := string(ro.Key)
-					namespace, _ := c.SessionGet("namespace")
-					if strings.HasPrefix(keyToMatch, namespace.(string)) {
-						keyToMatch = strings.TrimPrefix(keyToMatch, namespace.(string))
-					}
-
-					matched, err := filepath.Match(keyPattern, keyToMatch)
-					if err != nil {
-						return err
-					}
-
-					if matched {
-						_, err := c.Engine.Write(&contract.WriteInput{
-							Key:   ro.Key,
-							Value: nil,
-						})
-						if err != nil {
-							return err
-						}
-						deletedCount++
-					}
-					return nil
-				},
-			})
-			return err
-		} else {
+		if !strings.Contains(keyPattern, "*") {
 			_, err := c.Engine.Write(&contract.WriteInput{
 				Key:   c.AbsoluteKeyPath([]byte(keyPattern)),
 				Value: nil,
 			})
-			if err == nil {
-				deletedCount++
-			}
 			return err
 		}
+
+		keyPattern = strings.TrimLeft(keyPattern, "/")
+
+		prefix := strings.Split(keyPattern, "*")[0]
+		err := c.Engine.Iterate(&contract.IteratorOpts{
+			Prefix: c.AbsoluteKeyPath([]byte(prefix)),
+			Callback: func(ro *contract.ReadOutput) error {
+				keyToMatch := string(ro.Key)
+				namespace, _ := c.SessionGet("namespace")
+				if strings.HasPrefix(keyToMatch, namespace.(string)) {
+					keyToMatch = strings.TrimPrefix(keyToMatch, namespace.(string))
+				}
+
+				matched, err := filepath.Match(keyPattern, keyToMatch)
+				if err != nil {
+					return err
+				}
+
+				if !matched {
+					return nil
+				}
+
+				_, err = c.Engine.Write(&contract.WriteInput{
+					Key:   ro.Key,
+					Value: nil,
+				})
+				if err != nil {
+					return err
+				}
+				deletedCount++
+				return nil
+			},
+		})
+		return err
+
 	}
 
 	if c.Cfg.Server.Redis.AsyncWrites {
