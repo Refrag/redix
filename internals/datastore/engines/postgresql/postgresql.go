@@ -101,28 +101,29 @@ func (e *Engine) processValue(input *contract.WriteInput) (interface{}, bool, er
 }
 
 func (e *Engine) buildInsertQuery(input *contract.WriteInput) ([]string, bool) {
-	insertQuery := []string{insertQuery}
+	var query []string
 	appending := false
 
 	if input.OnlyIfNotExists {
-		insertQuery = append(insertQuery, onConflictDoNothing)
+		query = []string{insertQuery, onConflictDoNothing}
 	} else if input.Increment {
+		query = []string{incrementInsertQuery}
 		appending = true
-		insertQuery = append(insertQuery, incrementInsertQuery)
 	} else if input.Append {
+		query = []string{appendInsertQuery}
 		appending = true
-		insertQuery = append(insertQuery, appendInsertQuery)
 	} else {
+		// Use INSERT with ON CONFLICT DO UPDATE for upsert behavior
+		query = []string{insertQuery, "ON CONFLICT (_key) DO UPDATE SET _value = EXCLUDED._value"}
 		appending = true
-		insertQuery = append(insertQuery, updateQuery)
 	}
 
 	if appending && !input.KeepTTL {
-		insertQuery = append(insertQuery, expiresAtUpdateQuery)
+		query = append(query, expiresAtUpdateQuery)
 	}
 
-	insertQuery = append(insertQuery, returningQuery)
-	return insertQuery, appending
+	query = append(query, returningQuery)
+	return query, appending
 }
 
 // Write writes into the database.
