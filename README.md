@@ -5,3 +5,9 @@ Redix
 Contributions
 =============
 > You're welcome!
+
+
+# Run in docker
+```bash
+docker run -d -v $(pwd)/redix.hcl:/etc/redix/redix.hcl --link redixdb -p 6380:6380 refrag/redix
+```
