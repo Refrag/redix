@@ -14,6 +14,11 @@ type Engine interface {
 	Iterate(*IteratorOpts) error
 	Publish([]byte, []byte) error
 	Subscribe([]byte, func([]byte) error) error
+	// Set operations
+	SAdd(key []byte, members [][]byte, ttl time.Duration) (int, error)
+	SMembers(key []byte) ([][]byte, error)
+	ExpireSet(key []byte, ttl time.Duration) (int, error)
+	DelSet(key []byte) error
 }
 
 // WriteInput represents a PUT request.

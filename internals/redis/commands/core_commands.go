@@ -85,4 +85,19 @@ func RegisterHandlers() {
 	commandutilities.HandleFunc("CLIENTCOUNT", func(c *commandutilities.Context) {
 		commandhandlers.ClientCount(c)
 	})
+
+	// SADD key member [member ...]
+	commandutilities.HandleFunc("sadd", func(c *commandutilities.Context) {
+		commandhandlers.SAdd(c)
+	})
+
+	// SMEMBERS key
+	commandutilities.HandleFunc("smembers", func(c *commandutilities.Context) {
+		commandhandlers.SMembers(c)
+	})
+
+	// EXPIRE key seconds
+	commandutilities.HandleFunc("expire", func(c *commandutilities.Context) {
+		commandhandlers.Expire(c)
+	})
 }

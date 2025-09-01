@@ -12,6 +12,14 @@ const (
 			_value 		JSONB
 		);
 	`
+	createSetTableQuery = `
+		CREATE TABLE IF NOT EXISTS redis_set (
+			key TEXT NOT NULL,
+			member TEXT NOT NULL,
+			expires_at BIGINT DEFAULT 0,
+			PRIMARY KEY (key, member)
+		);
+	`
 	createUniqueIndexQuery = `
 		CREATE UNIQUE INDEX IF NOT EXISTS uniq_idx_redix_data_v5_key ON redix_data_v5 (_key);
 	`
@@ -20,6 +28,12 @@ const (
 	`
 	createExpiresAtIndexQuery = `
 		CREATE INDEX IF NOT EXISTS idx_redix_data_v5_expires_at ON redix_data_v5 (_expires_at);
+	`
+	createSetExpiresAtIndexQuery = `
+		CREATE INDEX IF NOT EXISTS idx_redis_set_expires_at ON redis_set (expires_at);
+	`
+	createSetKeyIndexQuery = `
+		CREATE INDEX IF NOT EXISTS idx_redis_set_key ON redis_set (key);
 	`
 
 	deleteExpiredKeysQuery = `
@@ -80,5 +94,34 @@ const (
 
 	listenQuery = `
 		LISTEN %s
+	`
+
+	// Set-related queries
+	deleteExpiredSetMembersQuery = `
+		DELETE FROM redis_set WHERE expires_at != 0 and expires_at <= $1
+	`
+
+	insertSetMemberQuery = `
+		INSERT INTO redis_set(key, member, expires_at) VALUES($1, $2, $3) ON CONFLICT (key, member) DO NOTHING
+	`
+
+	selectSetMembersQuery = `
+		SELECT member FROM redis_set WHERE key = $1 AND (expires_at = 0 OR expires_at > $2)
+	`
+
+	countSetMembersQuery = `
+		SELECT COUNT(*) FROM redis_set WHERE key = $1 AND (expires_at = 0 OR expires_at > $2)
+	`
+
+	updateSetExpirationQuery = `
+		UPDATE redis_set SET expires_at = $2 WHERE key = $1
+	`
+
+	deleteSetQuery = `
+		DELETE FROM redis_set WHERE key = $1
+	`
+
+	checkSetExistsQuery = `
+		SELECT COUNT(*) FROM redis_set WHERE key = $1 AND (expires_at = 0 OR expires_at > $2) LIMIT 1
 	`
 )

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Refrag/redix/internals/datastore/contract"
 )
@@ -200,4 +201,24 @@ func (e *Engine) Publish(channel []byte, payload []byte) error {
 // Subscribe not supported in filesystem mode.
 func (e *Engine) Subscribe(channel []byte, cb func([]byte) error) error {
 	return fmt.Errorf("the %s driver doesn't support publish/subscribe", Name)
+}
+
+// SAdd not supported in filesystem mode.
+func (e *Engine) SAdd(key []byte, members [][]byte, ttl time.Duration) (int, error) {
+	return 0, fmt.Errorf("the %s driver doesn't support set operations", Name)
+}
+
+// SMembers not supported in filesystem mode.
+func (e *Engine) SMembers(key []byte) ([][]byte, error) {
+	return nil, fmt.Errorf("the %s driver doesn't support set operations", Name)
+}
+
+// ExpireSet not supported in filesystem mode.
+func (e *Engine) ExpireSet(key []byte, ttl time.Duration) (int, error) {
+	return 0, fmt.Errorf("the %s driver doesn't support set operations", Name)
+}
+
+// DelSet not supported in filesystem mode.
+func (e *Engine) DelSet(key []byte) error {
+	return fmt.Errorf("the %s driver doesn't support set operations", Name)
 }
