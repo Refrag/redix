@@ -44,8 +44,16 @@ const (
 		DELETE FROM redix_data_v5
 	`
 
+	deleteAllSetsQuery = `
+		DELETE FROM redis_set
+	`
+
 	deleteMatchingKeysQuery = `
 		DELETE FROM redix_data_v5 WHERE _key LIKE $1
+	`
+
+	deleteMatchingSetsQuery = `
+		DELETE FROM redis_set WHERE key LIKE $1
 	`
 
 	insertQuery = `

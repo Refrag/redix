@@ -83,14 +83,28 @@ func (e *Engine) Open(dsn string) (err error) {
 
 func (e *Engine) handleDeleteOperations(input *contract.WriteInput) error {
 	if input.Key == nil {
+		// FLUSHALL - delete from both tables
 		_, err := e.conn.Exec(context.Background(), deleteAllKeysQuery)
+		if err != nil {
+			return err
+		}
+		_, err = e.conn.Exec(context.Background(), deleteAllSetsQuery)
 		return err
 	}
 
 	if input.Value == nil {
+		// FLUSHDB - delete matching keys from both tables
 		_, err := e.conn.Exec(
 			context.Background(),
 			deleteMatchingKeysQuery,
+			append(input.Key, '%'),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.conn.Exec(
+			context.Background(),
+			deleteMatchingSetsQuery,
 			append(input.Key, '%'),
 		)
 		return err
