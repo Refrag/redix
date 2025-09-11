@@ -10,11 +10,24 @@ import (
 )
 
 func deleteSingleKey(c *commandutilities.Context, keyPattern string) error {
+	key := c.AbsoluteKeyPath([]byte(keyPattern))
+
+	// Try to delete as a string key first
 	_, err := c.Engine.Write(&contract.WriteInput{
-		Key:   c.AbsoluteKeyPath([]byte(keyPattern)),
+		Key:   key,
 		Value: nil,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Also try to delete as a set key (this won't error if the set doesn't exist)
+	if delErr := c.Engine.DelSet(key); delErr != nil {
+		// Log but don't return error - we want DEL to succeed if either type was deleted
+		log.Warn("Failed to delete set key:", "key", keyPattern, "error", delErr.Error())
+	}
+
+	return nil
 }
 
 func deleteWildcardKeys(c *commandutilities.Context, keyPattern string, deletedCount *int) error {
@@ -76,7 +89,9 @@ func Del(c *commandutilities.Context) {
 				}
 			}
 		})()
-		c.Conn.WriteString("OK")
+		// Redis for Go actually executes NewIntCmd and not NewStringCmd for Del.
+		// We can't know the amount of keys deleted asynchronously, so we just return 1.
+		c.Conn.WriteInt(1)
 		return
 	}
 

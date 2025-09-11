@@ -36,12 +36,18 @@ func (e *Engine) Open(dsn string) (err error) {
 				%s
 				%s
 				%s
+				%s
+				%s
+				%s
 			`,
 			createExtensionQuery,
 			createTableQuery,
+			createSetTableQuery,
 			createUniqueIndexQuery,
 			createTrgmIndexQuery,
 			createExpiresAtIndexQuery,
+			createSetExpiresAtIndexQuery,
+			createSetKeyIndexQuery,
 		),
 	); err != nil {
 		return err
@@ -59,6 +65,15 @@ func (e *Engine) Open(dsn string) (err error) {
 				panic(err)
 			}
 
+			// Clean up expired set members
+			if _, err := e.conn.Exec(
+				context.Background(),
+				deleteExpiredSetMembersQuery,
+				now,
+			); err != nil {
+				panic(err)
+			}
+
 			time.Sleep(time.Second * 1)
 		}
 	})()
@@ -68,14 +83,28 @@ func (e *Engine) Open(dsn string) (err error) {
 
 func (e *Engine) handleDeleteOperations(input *contract.WriteInput) error {
 	if input.Key == nil {
+		// FLUSHALL - delete from both tables
 		_, err := e.conn.Exec(context.Background(), deleteAllKeysQuery)
+		if err != nil {
+			return err
+		}
+		_, err = e.conn.Exec(context.Background(), deleteAllSetsQuery)
 		return err
 	}
 
 	if input.Value == nil {
+		// FLUSHDB - delete matching keys from both tables
 		_, err := e.conn.Exec(
 			context.Background(),
 			deleteMatchingKeysQuery,
+			append(input.Key, '%'),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.conn.Exec(
+			context.Background(),
+			deleteMatchingSetsQuery,
 			append(input.Key, '%'),
 		)
 		return err
@@ -334,4 +363,93 @@ func (e *Engine) Subscribe(channel []byte, cb func([]byte) error) error {
 			return fmt.Errorf("unable to process notification due to: %s", err.Error())
 		}
 	}
+}
+
+// SAdd adds members to a set.
+func (e *Engine) SAdd(key []byte, members [][]byte, ttl time.Duration) (int, error) {
+	if len(members) == 0 {
+		return 0, nil
+	}
+
+	ctx := context.Background()
+	tx, err := e.conn.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var expiresAt int64 = 0
+	if ttl > 0 {
+		expiresAt = time.Now().Add(ttl).UnixNano()
+	}
+
+	addedCount := 0
+	for _, member := range members {
+		result, err := tx.Exec(ctx, insertSetMemberQuery, string(key), string(member), expiresAt)
+		if err != nil {
+			return 0, err
+		}
+		if result.RowsAffected() > 0 {
+			addedCount++
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+
+	return addedCount, nil
+}
+
+// SMembers returns all members of a set.
+func (e *Engine) SMembers(key []byte) ([][]byte, error) {
+	now := time.Now().UnixNano()
+	rows, err := e.conn.Query(context.Background(), selectSetMembersQuery, string(key), now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members [][]byte
+	for rows.Next() {
+		var member string
+		if err := rows.Scan(&member); err != nil {
+			return nil, err
+		}
+		members = append(members, []byte(member))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return members, nil
+}
+
+// ExpireSet sets TTL for a set key.
+func (e *Engine) ExpireSet(key []byte, ttl time.Duration) (int, error) {
+	// First check if the set exists and is not expired
+	now := time.Now().UnixNano()
+	var count int
+	if err := e.conn.QueryRow(context.Background(), checkSetExistsQuery, string(key), now).Scan(&count); err != nil {
+		return 0, err
+	}
+
+	if count == 0 {
+		return 0, nil // Set doesn't exist
+	}
+
+	expiresAt := time.Now().Add(ttl).UnixNano()
+	_, err := e.conn.Exec(context.Background(), updateSetExpirationQuery, string(key), expiresAt)
+	if err != nil {
+		return 0, err
+	}
+
+	return 1, nil
+}
+
+// DelSet deletes a set key.
+func (e *Engine) DelSet(key []byte) error {
+	_, err := e.conn.Exec(context.Background(), deleteSetQuery, string(key))
+	return err
 }
